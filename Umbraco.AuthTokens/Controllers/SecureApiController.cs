@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Net.Http;
 using System.Web.Http;
+using Umbraco.Web.Composing;
 using Umbraco.Web.Mvc;
 using Umbraco.Web.WebApi;
 using UmbracoAuthTokens.Data;
@@ -24,7 +25,7 @@ namespace UmbracoAuthTokens.Controllers
             if (isValidAuth)
             {
                 //Get the backoffice user from username
-                var user = ApplicationContext.Services.UserService.GetByUsername(auth.Username);
+                var user = Current.Services.UserService.GetByUsername(auth.Username);
 
 
                 //Generate AuthToken DB object

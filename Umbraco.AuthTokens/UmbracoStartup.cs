@@ -1,30 +1,62 @@
 ﻿using System.Linq;
 using Umbraco.Core;
+using Umbraco.Core.Composing;
 using Umbraco.Core.Events;
+using Umbraco.Core.Migrations;
+using Umbraco.Core.Migrations.Upgrade;
 using Umbraco.Core.Models;
 using Umbraco.Core.Models.Membership;
-using Umbraco.Core.Persistence;
+using Umbraco.Core.Logging;
+using Umbraco.Core.Scoping;
 using Umbraco.Core.Services;
+using Umbraco.Core.Services.Implement;
+using Umbraco.Web;
 using UmbracoAuthTokens.Data;
+
 
 namespace UmbracoAuthTokens
 {
-    public class UmbracoStartup : ApplicationEventHandler
+    [RuntimeLevel(MinLevel = RuntimeLevel.Run)]
+    public class UmbracoStartupComposer : IUserComposer
     {
-        /// <summary>
-        /// When umbraco has started up
-        /// </summary>
-        protected override void ApplicationStarted(UmbracoApplicationBase umbracoApplication, ApplicationContext applicationContext)
+        public void Compose(Composition composition)
         {
-            //When Umbraco Started lets check for DB table exists
-            var db = applicationContext.DatabaseContext.Database;
+            //composition.SetContentLastChanceFinder<My404ContentFinder>();
 
-            //If table does not exist
-            if (!db.TableExist("identityAuthTokens"))
-            {
-                //Create Table - do not override
-                db.CreateTable<UmbracoAuthToken>(false);
-            }
+            composition.Components().Append<UmbracoStartup>();
+        }
+    }
+
+    public class UmbracoStartup : IComponent
+    {
+        private IScopeProvider _scopeProvider;
+        private IMigrationBuilder _migrationBuilder;
+        private IKeyValueService _keyValueService;
+        private ILogger _logger;
+
+        public UmbracoStartup(IScopeProvider scopeProvider, IMigrationBuilder migrationBuilder, IKeyValueService keyValueService, ILogger logger)
+        {
+            _scopeProvider = scopeProvider;
+            _migrationBuilder = migrationBuilder;
+            _keyValueService = keyValueService;
+            _logger = logger;
+        }
+
+        public void Initialize()
+        {
+            // Create a migration plan for a specific project/feature
+            // We can then track that latest migration state/step for this project/feature
+            var migrationPlan = new MigrationPlan("identityAuthTokens");
+
+            // This is the steps we need to take
+            // Each step in the migration adds a unique value
+            migrationPlan.From(string.Empty)
+                .To<AddUmbracoAuthTokenTable>("identityAuthTokens-db");
+
+            // Go and upgrade our site (Will check if it needs to do the work or not)
+            // Based on the current/latest step
+            var upgrader = new Upgrader(migrationPlan);
+            upgrader.Execute(_scopeProvider, _migrationBuilder, _keyValueService, _logger);
 
             //Add event to saving/chaning pasword on Umbraco backoffice user
             UserService.SavingUser += UserService_SavingUser;
@@ -32,8 +64,19 @@ namespace UmbracoAuthTokens
             //Add event to saving/chaning pasword on Umbraco member
             MemberService.Saving += MemberService_Saving;
 
-            //Continue as normal
-            base.ApplicationStarted(umbracoApplication, applicationContext);
+            //ContentService.Saving += this.ContentService_Saving;
+        }
+
+        public void Terminate()
+        {
+            //Add event to saving/chaning pasword on Umbraco backoffice user
+            UserService.SavingUser -= UserService_SavingUser;
+
+            //Add event to saving/chaning pasword on Umbraco member
+            MemberService.Saving -= MemberService_Saving;
+
+            //unsubscribe during shutdown
+            //ContentService.Saving -= this.ContentService_Saving;
         }
 
         /// <summary>
@@ -85,7 +128,7 @@ namespace UmbracoAuthTokens
         /// When we save a user, let's check if backoffice user has changed their password
         /// </summary>
         void UserService_SavingUser(IUserService sender, SaveEventArgs<IUser> e)
-        {  
+        {
             //Saved entites (Could be more than one user saved. Very unlikely?)
             var user = e.SavedEntities.FirstOrDefault();
 
@@ -123,4 +166,27 @@ namespace UmbracoAuthTokens
             }
         }
     }
+
+    public class AddUmbracoAuthTokenTable : MigrationBase
+    {
+        public AddUmbracoAuthTokenTable(IMigrationContext context) : base(context)
+        {
+        }
+
+        public override void Migrate()
+        {
+            Logger.Debug<AddUmbracoAuthTokenTable>("Running migration {MigrationStep}", "AddUmbracoAuthTokenTable");
+
+            // Lots of methods available in the MigrationBase class - discover with this.
+            if (TableExists("identityAuthTokens") == false)
+            {
+                Create.Table<UmbracoAuthToken>().Do();
+            }
+            else
+            {
+                Logger.Debug<AddUmbracoAuthTokenTable>("The database table {DbTable} already exists, skipping", "identityAuthTokens");
+            }
+        }
+    }
+
 }

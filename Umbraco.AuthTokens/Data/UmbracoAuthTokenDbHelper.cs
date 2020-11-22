@@ -1,13 +1,10 @@
 ﻿using System;
-using Umbraco.Core;
-using Umbraco.Core.Persistence;
+using Umbraco.Web.Composing;
 
 namespace UmbracoAuthTokens.Data
 {
     public static class UserAuthTokenDbHelper
     {
-        private static readonly UmbracoDatabase Database = ApplicationContext.Current.DatabaseContext.Database;
-
         /// <summary>
         /// Try & see if we can find a record in the DB based off the User ID
         /// </summary>
@@ -15,11 +12,18 @@ namespace UmbracoAuthTokens.Data
         /// <returns>Returns Auth Token record/object in DB or null if not found</returns>
         public static UmbracoAuthToken GetAuthToken(int identityId)
         {
-            //Try & find a record in the DB from the userId
-            var findRecord = Database.SingleOrDefault<UmbracoAuthToken>("WHERE IdentityId=@0", identityId);
+            using (var scope = Current.ScopeProvider.CreateScope())
+            {
+                //Try & find a record in the DB from the userId
+                var findRecord = scope.Database.SingleOrDefault<UmbracoAuthToken>("WHERE IdentityId=@0", identityId);
 
-            //Return the object (Will be null if can't find an item)
-            return findRecord;
+                //Always complete scope
+                scope.Complete();
+
+                //Return the object (Will be null if can't find an item)
+                return findRecord;
+            }
+
         }
 
         /// <summary>
@@ -29,23 +33,29 @@ namespace UmbracoAuthTokens.Data
         /// <param name="authToken"></param>
         public static void InsertAuthToken(UmbracoAuthToken authToken)
         {
-            //Just to be 100% sure for data sanity that a record for the user does not exist already
-            var existingRecord = GetAuthToken(authToken.IdentityId);
-
-            //Insert new record if no item exists already
-            if (existingRecord == null)
+            using (var scope = Current.ScopeProvider.CreateScope())
             {
-                //Getting issues with insert & ID being 0 causing a conflict
-                Database.Insert(authToken);
-            }
-            else
-            {
-                //Update the existing record
-                existingRecord.AuthToken = authToken.AuthToken;
-                existingRecord.DateCreated = authToken.DateCreated;
+                //Just to be 100% sure for data sanity that a record for the user does not exist already
+                var existingRecord = GetAuthToken(authToken.IdentityId);
 
-                //Save the existing record we found
-                Database.Save(existingRecord);
+                //Insert new record if no item exists already
+                if (existingRecord == null)
+                {
+                    //Getting issues with insert & ID being 0 causing a conflict
+                    scope.Database.Insert(authToken);
+                }
+                else
+                {
+                    //Update the existing record
+                    existingRecord.AuthToken = authToken.AuthToken;
+                    existingRecord.DateCreated = authToken.DateCreated;
+
+                    //Save the existing record we found
+                    scope.Database.Save(existingRecord);
+                }
+
+                //Always complete scope
+                scope.Complete();
             }
         }
 
@@ -56,15 +66,20 @@ namespace UmbracoAuthTokens.Data
         /// <param name="identityId"></param>
         public static void DeleteAuthToken(int identityId)
         {
-            //Just to be 100% sure for data sanity that a record for the user does not exist already
-            var existingRecord = GetAuthToken(identityId);
-
-            if (existingRecord != null)
+            using (var scope = Current.ScopeProvider.CreateScope())
             {
-                //We found the record in the DB - let's remove/delete it
-                Database.Delete<UmbracoAuthToken>("WHERE IdentityId=@0", identityId);
-            }
+                //Just to be 100% sure for data sanity that a record for the user does not exist already
+                var existingRecord = GetAuthToken(identityId);
 
+                if (existingRecord != null)
+                {
+                    //We found the record in the DB - let's remove/delete it
+                    scope.Database.Delete<UmbracoAuthToken>("WHERE IdentityId=@0", identityId);
+                }
+
+                //Always complete scope
+                scope.Complete();
+            }
         }
 
 

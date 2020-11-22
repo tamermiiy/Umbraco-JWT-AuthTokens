@@ -1,12 +1,13 @@
-﻿using System;
+﻿using JWT;
+using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Web.Http.Controllers;
 using System.Web.Http.Filters;
-using JWT;
 using Umbraco.Core;
 using Umbraco.Core.Models.Membership;
+using Umbraco.Web.Composing;
 using UmbracoAuthTokens.Data;
 
 namespace UmbracoAuthTokens.Attributes
@@ -101,7 +102,7 @@ namespace UmbracoAuthTokens.Attributes
                 {
                     //Just the presence of the token & being deserialised with correct SECRET key is a good sign
                     //Get the user from userService from it's username
-                    var user = ApplicationContext.Current.Services.UserService.GetUserById(decodeJwt.IdentityId);
+                    var user = Current.Services.UserService.GetUserById(decodeJwt.IdentityId);
                     //var user = ApplicationContext.Current.Services.UserService.GetByProviderKey(decodeJwt.IdentityId);
 
                     //If user is NOT Approved OR the user is Locked Out

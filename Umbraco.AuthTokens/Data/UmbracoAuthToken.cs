@@ -1,5 +1,5 @@
-﻿using System;
-using Umbraco.Core.Persistence;
+﻿using NPoco;
+using System;
 using Umbraco.Core.Persistence.DatabaseAnnotations;
 
 namespace UmbracoAuthTokens.Data
